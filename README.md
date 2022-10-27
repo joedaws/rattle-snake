@@ -39,11 +39,11 @@ Not yet implemented
 
 ## How will this project communicate with the Beings simulation?
 
-One pattern is to use files
+One pattern is to use files like csv or json.
 
-Another is to consider using SQLite
+Another is to consider using database, (start with SQLite why not).
 
-Third option, translate to Elixir
+Third option, translate this project to Elixir
 
 # Streams
 
@@ -54,8 +54,13 @@ Third option, translate to Elixir
   a function to make a new database file and added the
   `create_new_nodes` argument of the constructor of
   `PlaneMap`.
-  to create new database name.
-- When instantiating a `PlaneMap` add option to load 
-  from a database or create a database. Use a `load_nodes` 
-  function.
+- When instantiating a `PlaneMap` added the ability to load 
+  from a database or create a database. When a database file 
+  is passed to the constructor, the nodes are loaded from that
+  database. On the other hand when there is no file passed 
+  to the constructor, we create the nodes and a database
+  where those nodes are stored.
+  
+## November 2, 2022
 
+- Build connections between nodes
