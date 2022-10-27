@@ -1,11 +1,18 @@
 """
 draw the concentric circles
 """
+from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
 from rattle_snake.constants import BeingCulture
-from rattle_snake.db_helpers import db_setup, create_node, create_connection
+from rattle_snake.db_helpers import (
+    db_setup,
+    create_node,
+    create_connection,
+    get_num_circles,
+    get_plane_nodes,
+)
 
 
 class PlaneMap:
@@ -27,22 +34,53 @@ class PlaneMap:
     markers = ["*", ".", "p", "s", "v"]
 
     def __init__(
-        self, being_culture: str, num_circles: int = 4, create_new_nodes: bool = True
+        self,
+        db_file: str = "",
+        being_culture: BeingCulture = BeingCulture.WEIRD,
+        num_circles: int = 4,
     ):
-        """
+        """Sets up the plane map
+
+        Either creates all the nodes or loads them from an existing database
+
         Args:
             being_culture (str): One of "weird_science", "dream_realm", "deep_denizen"
             num_circles (int): Number of tiered circles to draw
+            create_new_nodes (bool): Indicates whether to load existing or create new nodes.
+            db_file (str): Path to a db_file
         """
-        # ensure that the database is ready to go
-        db_setup()
-        self.being_culture = BeingCulture(being_culture)
-        self.num_circles = num_circles
-        # nodes setup
+        self.being_culture = being_culture
+        if db_file:
+            self.db_file = db_file
+            db_setup(db_file=db_file)
+            self.num_circles = get_num_circles(self.db_file, self.being_culture.value)
+            self.load_nodes()
+        else:
+            db_file_name = self.generate_sqlite_db()
+            self.db_file = db_file_name
+            self.num_circles = num_circles
+            db_setup(db_file=db_file_name)
+
+            self.generate_nodes()
+
+    def save(self):
+        """Save an image of the map in is current state"""
+        plt.savefig(self.title)
+
+    def generate_sqlite_db(self) -> str:
+        """Generate a new sqlite database"""
+
+        now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        db_file_name = f"nodes-{now_str}.db"
+
+        return db_file_name
+
+    def load_nodes(self) -> None:
+        """Load the nodes for the given plane from the given db"""
         self.stratum_radii = 2.0
         self.stratum_boundaries = [
             ((i) * self.stratum_radii, (i + 1) * self.stratum_radii)
-            for i in range(num_circles)
+            for i in range(self.num_circles)
         ]
 
         # plotting setup
@@ -52,13 +90,19 @@ class PlaneMap:
         self.title = self.map_file_names[self.being_culture]
         plt.title(self.title)
 
-        # this populates the nodes table
-        if create_new_nodes:
-            self.generate_nodes()
+        self.draw_circles()
 
-    def save(self):
-        """Save an image of the map in is current state"""
-        plt.savefig(self.title)
+        self.nodes = get_plane_nodes(self.db_file, self.being_culture.value)
+
+        for _, x, y, _, stratum_id, _, _ in self.nodes:
+
+            self.ax.scatter(
+                x,
+                y,
+                color=self.colors[stratum_id - 1],
+                marker=self.markers[stratum_id - 1],
+                linewidths=3.0,
+            )
 
     def generate_nodes(self, k: int = 3, min_support: int = 3, max_support: int = 10):
         """Generate the nodes.
@@ -66,7 +110,26 @@ class PlaneMap:
         There are k population centers in each stratum.
         For each population center we generate a random nubmer of
         supporting/surround nodes.
+
+        Sets up the nodes property of this class
         """
+        self.nodes = []
+        # nodes setup
+        self.stratum_radii = 2.0
+        self.stratum_boundaries = [
+            ((i) * self.stratum_radii, (i + 1) * self.stratum_radii)
+            for i in range(self.num_circles)
+        ]
+
+        # plotting setup
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111)
+        self.ax.set_aspect(1)
+        self.title = self.map_file_names[self.being_culture]
+        plt.title(self.title)
+
+        self.draw_circles()
+
         stratum_num = 0
         for color_num, bounds in enumerate(self.stratum_boundaries):
             print(f"stratum number {stratum_num}")
@@ -95,10 +158,18 @@ class PlaneMap:
                 # is_population_center true == 1
                 # yeild is fixed at 100 for now
                 population_center_resource_yeild = np.random.randint(100, 200)
-                node = (x, y, stratum_num, 1, population_center_resource_yeild)
+                node = (
+                    x,
+                    y,
+                    self.being_culture.value,
+                    stratum_num,
+                    1,
+                    population_center_resource_yeild,
+                )
 
-                conn = create_connection()
+                conn = create_connection(self.db_file)
                 create_node(conn, node)
+                self.nodes.append(node)
 
                 # generate supporting nodes
                 num_support = np.random.randint(min_support, max_support + 1)
@@ -126,8 +197,16 @@ class PlaneMap:
                         int(population_center_resource_yeild * 0.6),
                     )
                     # 0 for not a population center
-                    node = (x, y, stratum_num, 0, supporting_node_resource_yeild)
+                    node = (
+                        x,
+                        y,
+                        self.being_culture.value,
+                        stratum_num,
+                        0,
+                        supporting_node_resource_yeild,
+                    )
                     create_node(conn, node)
+                    self.nodes.append(node)
 
     def draw_circles(self):
         """Draw the domain of the weird science beings"""
@@ -142,19 +221,20 @@ class PlaneMap:
             # draw a circle
             self.ax.plot(x, y, color="gray")
 
-    def draw(self):
-        """Draw everyting for this realm map"""
-        self.draw_circles()
-        # TODO replace with a load nodes from the database
-        self.generate_nodes()
-
 
 def main():
-    plane_map = PlaneMap(being_culture="weird_science")
-    plane_map.draw()
+    plane_map = PlaneMap(being_culture=BeingCulture.WEIRD)
     plane_map.save()
 
-    print("Drawing Complete")
+    print("Drawing Complete.")
+    print(f"saved to {plane_map.title}")
+
+    # test the loading
+    plane_map = PlaneMap(
+        db_file=plane_map.db_file, being_culture=plane_map.being_culture
+    )
+    plane_map.save()
+    print("Drawing complete from map loaded from the db")
 
 
 if __name__ == "__main__":

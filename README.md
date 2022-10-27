@@ -2,7 +2,6 @@
 
 Python library for generating random points
 
-
 ## Setup
 
 ### pyenv
@@ -45,3 +44,18 @@ One pattern is to use files
 Another is to consider using SQLite
 
 Third option, translate to Elixir
+
+# Streams
+
+## October 26, 2022
+
+- Whenever a new call to `generate_nodes` is called
+  we'll put those nodes in a new database. Created
+  a function to make a new database file and added the
+  `create_new_nodes` argument of the constructor of
+  `PlaneMap`.
+  to create new database name.
+- When instantiating a `PlaneMap` add option to load 
+  from a database or create a database. Use a `load_nodes` 
+  function.
+
