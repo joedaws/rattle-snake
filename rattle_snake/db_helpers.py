@@ -16,11 +16,27 @@ CREATE TABLE IF NOT EXISTS nodes (
 """
 
 
-INSERT_NODE_QUERY = """
-INSERT INTO nodes (x,y,plane,stratum_id,is_population_center,resource_yeild)
-VALUES(?,?,?,?,?,?)
+CREATE_EDGES_TABLE_QUERY = """
+CREATE TABLE IF NOT EXISTS edges (
+  edge_id INTEGER PRIMARY KEY,
+  start INTEGER NOT NULL,
+  end INTEGER NOT NULL,
+  plane TEXT NOT NULL,
+  length INTEGER NOT NULL
+);
 """
 
+
+INSERT_NODE_QUERY = """
+INSERT INTO nodes (node_id,x,y,plane,stratum_id,is_population_center,resource_yeild)
+VALUES(?,?,?,?,?,?,?)
+"""
+
+
+INSERT_EDGE_QUERY = """
+INSERT INTO edges (edge_id,start,end,plane,length)
+VALUES(?,?,?,?,?)
+"""
 
 NUM_CIRCLES_QUERY = """
 SELECT MAX(stratum_id) from nodes where plane = ?;
@@ -29,6 +45,15 @@ SELECT MAX(stratum_id) from nodes where plane = ?;
 
 GET_PLANE_NODES_QUERY = """
 SELECT * from nodes where plane = ?;
+"""
+
+
+GET_PLANE_EDGES_QUERY = """
+SELECT * from edges where plane = ?;
+"""
+
+GET_NODE_X_Y_QUERY = """
+SELECT x, y from nodes where node_id = ?;
 """
 
 
@@ -50,9 +75,17 @@ def create_nodes_table(conn):
     conn.commit()
 
 
+def create_edges_table(conn):
+    """Create the Edges table if it doesn't yet exist."""
+    cur = conn.cursor()
+    cur.execute(CREATE_EDGES_TABLE_QUERY)
+    conn.commit()
+
+
 def create_node(conn, node):
     """
     node is a list/tuple of 6 values
+    - id
     - x
     - y
     - plane
@@ -66,10 +99,29 @@ def create_node(conn, node):
     print(f"added node {node}")
 
 
+def create_edge(conn, edge):
+    """
+    edge is a tuple of 4 values
+    - edge_id
+    - start
+    - end
+    - plane
+    - length
+
+    The start and end are node_ids of the nodes
+    which the edge connects.
+    """
+    cur = conn.cursor()
+    cur.execute(INSERT_EDGE_QUERY, edge)
+    conn.commit()
+    print(f"added edge {edge}")
+
+
 def db_setup(db_file: str):
     """Sets up the database with tables if it hasn't already been setup."""
     conn = create_connection(db_file=db_file)
     create_nodes_table(conn)
+    create_edges_table(conn)
 
 
 def get_num_circles(db_file: str, plane: str) -> int:
@@ -88,3 +140,20 @@ def get_plane_nodes(db_file: str, plane: str):
     cur.execute(GET_PLANE_NODES_QUERY, (plane,))
     rows = cur.fetchall()
     return rows
+
+
+def get_plane_edges(db_file: str, plane: str):
+    conn = create_connection(db_file)
+    cur = conn.cursor()
+    cur.execute(GET_PLANE_EDGES_QUERY, (plane,))
+    rows = cur.fetchall()
+    return rows
+
+
+def get_node_x_y(db_file: str, node_id: int):
+    conn = create_connection(db_file)
+    cur = conn.cursor()
+    cur.execute(GET_NODE_X_Y_QUERY, (node_id,))
+    rows = cur.fetchall()
+    # should only ever return info on ONE node
+    return rows[0]

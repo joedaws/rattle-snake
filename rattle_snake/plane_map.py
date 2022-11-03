@@ -6,12 +6,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from rattle_snake.constants import BeingCulture
+from rattle_snake.draw import draw_pop_center, draw_support_node, draw_edge
 from rattle_snake.db_helpers import (
     db_setup,
     create_node,
+    create_edge,
     create_connection,
     get_num_circles,
     get_plane_nodes,
+    get_plane_edges,
+    get_node_x_y,
 )
 
 
@@ -54,14 +58,14 @@ class PlaneMap:
             self.db_file = db_file
             db_setup(db_file=db_file)
             self.num_circles = get_num_circles(self.db_file, self.being_culture.value)
-            self.load_nodes()
+            self.load_map()
         else:
             db_file_name = self.generate_sqlite_db()
             self.db_file = db_file_name
             self.num_circles = num_circles
             db_setup(db_file=db_file_name)
 
-            self.generate_nodes()
+            self.generate_map()
 
     def save(self):
         """Save an image of the map in is current state"""
@@ -75,8 +79,8 @@ class PlaneMap:
 
         return db_file_name
 
-    def load_nodes(self) -> None:
-        """Load the nodes for the given plane from the given db"""
+    def load_map(self) -> None:
+        """Load the map data from the given db"""
         self.stratum_radii = 2.0
         self.stratum_boundaries = [
             ((i) * self.stratum_radii, (i + 1) * self.stratum_radii)
@@ -94,26 +98,45 @@ class PlaneMap:
 
         self.nodes = get_plane_nodes(self.db_file, self.being_culture.value)
 
-        for _, x, y, _, stratum_id, _, _ in self.nodes:
+        for _, x, y, _, stratum_id, pop_center, _ in self.nodes:
 
-            self.ax.scatter(
-                x,
-                y,
-                color=self.colors[stratum_id - 1],
-                marker=self.markers[stratum_id - 1],
-                linewidths=3.0,
-            )
+            if pop_center:
+                draw_pop_center(
+                    self.ax,
+                    x,
+                    y,
+                    self.colors[stratum_id - 1],
+                    self.markers[stratum_id - 1],
+                )
+            else:
+                draw_support_node(
+                    self.ax,
+                    x,
+                    y,
+                    self.colors[stratum_id - 1],
+                    self.markers[stratum_id - 1],
+                )
 
-    def generate_nodes(self, k: int = 3, min_support: int = 3, max_support: int = 10):
-        """Generate the nodes.
+        self.edges = get_plane_edges(self.db_file, self.being_culture.value)
+
+        for _, start, end, _, _ in self.edges:
+            start_x, start_y = get_node_x_y(self.db_file, start)
+            end_x, end_y = get_node_x_y(self.db_file, end)
+
+            x_values = [start_x, end_x]
+            y_values = [start_y, end_y]
+
+            draw_edge(self.ax, x_values, y_values)
+
+    def generate_map(self, k: int = 3, min_support: int = 3, max_support: int = 10):
+        """Generate the map and nodes and edges to a database
 
         There are k population centers in each stratum.
         For each population center we generate a random nubmer of
         supporting/surround nodes.
-
-        Sets up the nodes property of this class
         """
         self.nodes = []
+        self.edges = []
         # nodes setup
         self.stratum_radii = 2.0
         self.stratum_boundaries = [
@@ -131,6 +154,9 @@ class PlaneMap:
         self.draw_circles()
 
         stratum_num = 0
+        # node id is the primary key of the nodes table
+        node_id = 1
+        edge_id = 1
         for color_num, bounds in enumerate(self.stratum_boundaries):
             print(f"stratum number {stratum_num}")
             stratum_num += 1
@@ -146,19 +172,14 @@ class PlaneMap:
                 print(self.stratum_boundaries[i][0], self.stratum_boundaries[i][1])
                 print(i, ":", x, y)
 
-                self.ax.scatter(
-                    x,
-                    y,
-                    color=self.colors[color_num],
-                    marker=self.markers[i],
-                    linewidths=3.0,
-                )
+                draw_pop_center(self.ax, x, y, self.colors[color_num], self.markers[i])
 
                 # insert population center into the table
                 # is_population_center true == 1
                 # yeild is fixed at 100 for now
                 population_center_resource_yeild = np.random.randint(100, 200)
                 node = (
+                    node_id,
                     x,
                     y,
                     self.being_culture.value,
@@ -169,6 +190,10 @@ class PlaneMap:
 
                 conn = create_connection(self.db_file)
                 create_node(conn, node)
+                pop_center_id = node_id
+                pop_center_x = x
+                pop_center_y = y
+                node_id += 1
                 self.nodes.append(node)
 
                 # generate supporting nodes
@@ -182,13 +207,8 @@ class PlaneMap:
                     x = l * np.cos(a)
                     y = l * np.sin(a)
 
-                    self.ax.scatter(
-                        x,
-                        y,
-                        color=self.colors[color_num],
-                        marker=self.markers[i],
-                        alpha=0.5,
-                        linewidths=0.25,
+                    draw_support_node(
+                        self.ax, x, y, self.colors[color_num], self.markers[i]
                     )
 
                     yeild_delta = 50
@@ -198,6 +218,7 @@ class PlaneMap:
                     )
                     # 0 for not a population center
                     node = (
+                        node_id,
                         x,
                         y,
                         self.being_culture.value,
@@ -206,7 +227,26 @@ class PlaneMap:
                         supporting_node_resource_yeild,
                     )
                     create_node(conn, node)
+
+                    # all supporting nodes are connected to their
+                    # corresponding population center
+                    x_values = [pop_center_x, x]
+                    y_values = [pop_center_y, y]
+                    draw_edge(self.ax, x_values, y_values)
+                    # edge_id, start, end, length
+                    edge = (
+                        edge_id,
+                        pop_center_id,
+                        node_id,
+                        self.being_culture.value,
+                        dist(pop_center_x, pop_center_y, x, y),
+                    )
+                    create_edge(conn, edge)
+
+                    edge_id += 1
+                    node_id += 1
                     self.nodes.append(node)
+                    self.edges.append(edge)
 
     def draw_circles(self):
         """Draw the domain of the weird science beings"""
@@ -220,6 +260,10 @@ class PlaneMap:
 
             # draw a circle
             self.ax.plot(x, y, color="gray")
+
+
+def dist(x1, y1, x2, y2):
+    return np.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
 
 
 def main():
