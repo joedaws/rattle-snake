@@ -1,6 +1,7 @@
 # Rattle Snake
 
-Python library for generating random points
+Python library for generating interesting 
+(at least according to my arbitrary criteria) points
 
 
 ![Plane Map of Weird Science](images/weird_science_plane.png)
@@ -19,12 +20,11 @@ https://python-poetry.org/
 poetry install
 ```
 
-
 ## How to run
 For now try
 
 ``` shell
-poetry run python rattle_snake.plane_map
+poetry run python -m rattle_snake.plane_map
 ```
 
 which should generate an image in the images directory for a certain
