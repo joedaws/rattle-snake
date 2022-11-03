@@ -2,6 +2,9 @@
 
 Python library for generating random points
 
+
+![Plane Map of Weird Science](images/weird_science_plane.png)
+
 ## Setup
 
 ### pyenv
@@ -31,11 +34,18 @@ plane of existence.
 
 Not yet implemented
 
-## desired features 
+## How are nodes generated?
 
-- want to be able formulate more urban versus not urban settings
+There are multiple planes of existence, one for each of the 3
+cultures of beings from the [beings](https://github.com/joedaws/beings) simulation.
+Each plane is made up of concentric circles corresponding to the different ranks
+that beings might have. For each circle, there are two kinds of categories of nodes,
+population centers and supporting nodes. 
 
-- how should nodes be connected?
+The population centers are connected to all of the their supporting nodes, and 
+some of the supporting nodes are connected to the supporting nodes of other 
+population centers.
+
 
 ## How will this project communicate with the Beings simulation?
 
