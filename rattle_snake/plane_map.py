@@ -7,6 +7,8 @@ import numpy as np
 
 from rattle_snake.constants import BeingCulture
 from rattle_snake.draw import draw_pop_center, draw_support_node, draw_edge
+from rattle_snake.node import Node, node_dist
+from rattle_snake.cluster import Cluster, find_closest_nodes
 from rattle_snake.db_helpers import (
     db_setup,
     create_node,
@@ -134,7 +136,12 @@ class PlaneMap:
         There are k population centers in each stratum.
         For each population center we generate a random nubmer of
         supporting/surround nodes.
+
+        Each population center along with its supporting nodes
+        forms a cluster which is enumerated by the node id
+        of the population center. We random connect near by clusters
         """
+        self.clusters = []
         self.nodes = []
         self.edges = []
         # nodes setup
@@ -187,6 +194,15 @@ class PlaneMap:
                     1,
                     population_center_resource_yeild,
                 )
+                pop_node = Node(
+                    node_id=node_id,
+                    x=x,
+                    y=y,
+                    plane=self.being_culture.value,
+                    stratum_id=stratum_num,
+                    is_population_center=True,
+                    resource_yeild=population_center_resource_yeild,
+                )
 
                 conn = create_connection(self.db_file)
                 create_node(conn, node)
@@ -197,6 +213,7 @@ class PlaneMap:
                 self.nodes.append(node)
 
                 # generate supporting nodes
+                cluster_supporting_nodes = []
                 num_support = np.random.randint(min_support, max_support + 1)
                 for _ in range(num_support):
                     # controls how close the points are
@@ -226,6 +243,16 @@ class PlaneMap:
                         0,
                         supporting_node_resource_yeild,
                     )
+                    supp_node = Node(
+                        node_id=node_id,
+                        x=x,
+                        y=y,
+                        plane=self.being_culture.value,
+                        stratum_id=stratum_num,
+                        is_population_center=False,
+                        resource_yeild=supporting_node_resource_yeild,
+                    )
+                    cluster_supporting_nodes.append(supp_node)
                     create_node(conn, node)
 
                     # all supporting nodes are connected to their
@@ -247,6 +274,34 @@ class PlaneMap:
                     node_id += 1
                     self.nodes.append(node)
                     self.edges.append(edge)
+
+                self.clusters.append(
+                    Cluster(
+                        population_center=pop_node,
+                        supporting_nodes=cluster_supporting_nodes,
+                    )
+                )
+
+        # connect supporting nodes between clusters
+        # cluster = self.clusters[0]
+        for cluster in self.clusters:
+            node1, node2 = find_closest_nodes(self.clusters, cluster)
+            edge = (
+                edge_id,
+                node1.node_id,
+                node2.node_id,
+                self.being_culture.value,
+                node_dist(node1, node2),
+            )
+            conn = create_connection(self.db_file)
+            create_edge(conn, edge)
+
+            edge_id += 1
+
+            x_values = [node1.x, node2.x]
+            y_values = [node2.y, node2.y]
+            draw_edge(self.ax, x_values, y_values)
+            self.edges.append(edge)
 
     def draw_circles(self):
         """Draw the domain of the weird science beings"""

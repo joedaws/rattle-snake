@@ -87,13 +87,17 @@ Third option, translate this project to Elixir
 ## November 2, 2022
 
 - Build edges between population centers and supporting nodes
-  from different clusters
 - Store edges in the edges table of the database
 - Load edges from database when starting up from database
 
 ## November 9, 2022
 
-- Build edges between randomly chosen supporting nodes 
-- Werid science plane has concentric circles map
+- Draw an edge between clusters by drawing an edge between the 
+  closest supporting nodes of each cluster
+  
+## November 15, 2022
+- Weird science plane has concentric circles map
 - Deep Denizens plane has concentric triangles map
 - Dream Realm plane has concentric pentagrams map
+- ? In each stratum the nodes become connected to one another
+  when within a certain threshold
