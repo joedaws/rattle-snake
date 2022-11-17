@@ -169,6 +169,9 @@ class PlaneMap:
 
         self.draw_circles()
 
+        # this delta keeps the generated nodes farther away from the boundary
+        boundary_delta = 0.3
+
         stratum_num = 0
         # node id is the primary key of the nodes table
         node_id = 1
@@ -179,7 +182,9 @@ class PlaneMap:
 
             # generate the pop centers
             for i in range(k):
-                length = np.random.uniform(bounds[0], bounds[1])
+                length = np.random.uniform(
+                    bounds[0] + boundary_delta, bounds[1] - boundary_delta
+                )
                 print(f"length: {length}")
                 angle = np.pi * np.random.uniform(0, 2)
 
@@ -229,7 +234,7 @@ class PlaneMap:
                 num_support = np.random.randint(min_support, max_support + 1)
                 for _ in range(num_support):
                     # controls how close the points are
-                    delta = 0.2
+                    delta = 0.1
                     l = np.random.uniform(length - delta, length + delta)
                     a = np.random.uniform(angle - np.pi / 8, angle + np.pi / 8)
 
@@ -327,7 +332,6 @@ class PlaneMap:
             G.add_edge(cluster_id_1, cluster_id_2)
 
         cluster_dict = {c.cluster_id(): c for c in self.clusters}
-        print(cluster_dict)
         # if the clusters form a disconnected graph
         # keep adding edges until they are connected
         while not nx.is_connected(G):

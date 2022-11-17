@@ -101,8 +101,10 @@ Third option, translate this project to Elixir
   are connected in the sense that there is a path from each
   node to any other node.
   
-  Suppose there are 4 clusters. Then we can check if all clusters
-  are connected 
+## November 23, 2022
+
+- Add minimum distance between population centers
+  
   
 ## Notes for improvement
 
