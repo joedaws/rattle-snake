@@ -9,6 +9,7 @@ class Node:
     y: float
     plane: str
     stratum_id: int
+    cluster_id: int
     is_population_center: bool
     resource_yeild: int
 

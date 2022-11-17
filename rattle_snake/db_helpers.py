@@ -10,12 +10,14 @@ CREATE TABLE IF NOT EXISTS nodes (
   y REAL NOT NULL,
   plane TEXT NOT NULL,
   stratum_id INTEGER NOT NULL,
+  cluster_id INTEGER NOT NULL,
   is_population_center INTERGER NOT NULL,
   resource_yeild INTEGER NOT NULL
 );
 """
 
-
+# start and end are the node_id fields of the
+# starting and ending node of the edge
 CREATE_EDGES_TABLE_QUERY = """
 CREATE TABLE IF NOT EXISTS edges (
   edge_id INTEGER PRIMARY KEY,
@@ -28,8 +30,8 @@ CREATE TABLE IF NOT EXISTS edges (
 
 
 INSERT_NODE_QUERY = """
-INSERT INTO nodes (node_id,x,y,plane,stratum_id,is_population_center,resource_yeild)
-VALUES(?,?,?,?,?,?,?)
+INSERT INTO nodes (node_id,x,y,plane,stratum_id,cluster_id,is_population_center,resource_yeild)
+VALUES(?,?,?,?,?,?,?,?)
 """
 
 
@@ -90,6 +92,7 @@ def create_node(conn, node):
     - y
     - plane
     - stratum_id
+    - cluster_id
     - is_population_center
     - resource_yeild
     """

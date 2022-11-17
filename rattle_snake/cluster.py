@@ -17,7 +17,9 @@ class Cluster:
         return self.population_center.node_id
 
 
-def find_closest_nodes(clusters: List[Cluster], cluster: Cluster) -> Tuple[Node, Node]:
+def find_closest_nodes(
+    clusters: List[Cluster], cluster: Cluster
+) -> Tuple[Node, Node, float]:
     """Find the nearest node among all other cluster's nodes to one of the cluter nodes"""
 
     cluster_nodes = [node for node in cluster.supporting_nodes]
@@ -45,4 +47,21 @@ def find_closest_nodes(clusters: List[Cluster], cluster: Cluster) -> Tuple[Node,
             node2 = n2
             min_distance = distance
 
-    return node1, node2
+    return node1, node2, min_distance
+
+
+def find_closest_nodes_between_clusters(
+    cluster_group_1: List[Cluster], cluster_group_2: List[Cluster]
+) -> Tuple[Node, Node, float]:
+    """Find the nodes which are closest between the two groups"""
+
+    node1, node2, min_dist = find_closest_nodes(cluster_group_2, cluster_group_1[0])
+    for cluster in cluster_group_1[1:]:
+
+        n1, n2, dist = find_closest_nodes(cluster_group_2, cluster)
+        if dist < min_dist:
+            node1 = n1
+            node2 = n2
+            min_dist = dist
+
+    return node1, node2, min_dist

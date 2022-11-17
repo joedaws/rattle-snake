@@ -95,9 +95,27 @@ Third option, translate this project to Elixir
 - Draw an edge between clusters by drawing an edge between the 
   closest supporting nodes of each cluster
   
-## November 15, 2022
-- Weird science plane has concentric circles map
-- Deep Denizens plane has concentric triangles map
-- Dream Realm plane has concentric pentagrams map
-- ? In each stratum the nodes become connected to one another
-  when within a certain threshold
+## November 16, 2022 
+
+- Increase the number of connections so that all clusters 
+  are connected in the sense that there is a path from each
+  node to any other node.
+  
+  Suppose there are 4 clusters. Then we can check if all clusters
+  are connected 
+  
+## Notes for improvement
+
+### Use efficient node distance algorithm
+
+We need to compute the pair distance between many nodes
+when deciding how the clusters will be connected. The
+current implementation uses a k-nearest neighbors algorithm
+`trained` on each cluster's nodes. There are more efficient
+algorithms for computing distances than what we used first.
+Therefore, we could speed up the node joining process by
+improving the efficiency of the distance finding algorithm.
+  
+### Database improvements
+
+Could use a better database to support the backend of this project.

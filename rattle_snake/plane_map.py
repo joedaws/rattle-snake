@@ -4,11 +4,16 @@ draw the concentric circles
 from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
+import networkx as nx
 
 from rattle_snake.constants import BeingCulture
 from rattle_snake.draw import draw_pop_center, draw_support_node, draw_edge
 from rattle_snake.node import Node, node_dist
-from rattle_snake.cluster import Cluster, find_closest_nodes
+from rattle_snake.cluster import (
+    Cluster,
+    find_closest_nodes,
+    find_closest_nodes_between_clusters,
+)
 from rattle_snake.db_helpers import (
     db_setup,
     create_node,
@@ -19,6 +24,10 @@ from rattle_snake.db_helpers import (
     get_plane_edges,
     get_node_x_y,
 )
+
+
+def dist(x1, y1, x2, y2):
+    return np.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
 
 
 class PlaneMap:
@@ -100,7 +109,7 @@ class PlaneMap:
 
         self.nodes = get_plane_nodes(self.db_file, self.being_culture.value)
 
-        for _, x, y, _, stratum_id, pop_center, _ in self.nodes:
+        for _, x, y, _, stratum_id, _, pop_center, _ in self.nodes:
 
             if pop_center:
                 draw_pop_center(
@@ -185,12 +194,14 @@ class PlaneMap:
                 # is_population_center true == 1
                 # yeild is fixed at 100 for now
                 population_center_resource_yeild = np.random.randint(100, 200)
+                # a population center's node_id is the same as it's cluster id
                 node = (
                     node_id,
                     x,
                     y,
                     self.being_culture.value,
                     stratum_num,
+                    node_id,
                     1,
                     population_center_resource_yeild,
                 )
@@ -200,6 +211,7 @@ class PlaneMap:
                     y=y,
                     plane=self.being_culture.value,
                     stratum_id=stratum_num,
+                    cluster_id=node_id,
                     is_population_center=True,
                     resource_yeild=population_center_resource_yeild,
                 )
@@ -240,6 +252,7 @@ class PlaneMap:
                         y,
                         self.being_culture.value,
                         stratum_num,
+                        pop_center_id,
                         0,
                         supporting_node_resource_yeild,
                     )
@@ -249,6 +262,7 @@ class PlaneMap:
                         y=y,
                         plane=self.being_culture.value,
                         stratum_id=stratum_num,
+                        cluster_id=pop_center_id,
                         is_population_center=False,
                         resource_yeild=supporting_node_resource_yeild,
                     )
@@ -266,7 +280,7 @@ class PlaneMap:
                         pop_center_id,
                         node_id,
                         self.being_culture.value,
-                        dist(pop_center_x, pop_center_y, x, y),
+                        node_dist(pop_node, supp_node),
                     )
                     create_edge(conn, edge)
 
@@ -282,10 +296,14 @@ class PlaneMap:
                     )
                 )
 
-        # connect supporting nodes between clusters
-        # cluster = self.clusters[0]
+        cluster_connections = []
+
+        # Each cluster is connected to it's closest neighbor
+        # node by creating an edge between the two closest
+        # supporting nodes (one from each cluster).
         for cluster in self.clusters:
-            node1, node2 = find_closest_nodes(self.clusters, cluster)
+            node1, node2, _ = find_closest_nodes(self.clusters, cluster)
+            cluster_connections.append((node1.cluster_id, node2.cluster_id))
             edge = (
                 edge_id,
                 node1.node_id,
@@ -303,6 +321,65 @@ class PlaneMap:
             draw_edge(self.ax, x_values, y_values)
             self.edges.append(edge)
 
+        # setup a graph to detect disconnected components
+        G = nx.Graph()
+        for cluster_id_1, cluster_id_2 in cluster_connections:
+            G.add_edge(cluster_id_1, cluster_id_2)
+
+        cluster_dict = {c.cluster_id(): c for c in self.clusters}
+        print(cluster_dict)
+        # if the clusters form a disconnected graph
+        # keep adding edges until they are connected
+        while not nx.is_connected(G):
+            connected_components = nx.connected_components(G)
+            comp1 = next(connected_components)
+            comp2 = next(connected_components)
+            comp_counter = 2
+
+            cluster_group_1 = [cluster_dict[c] for c in comp1]
+            cluster_group_2 = [cluster_dict[c] for c in comp2]
+
+            node1, node2, min_dist = find_closest_nodes_between_clusters(
+                cluster_group_1, cluster_group_2
+            )
+
+            for comp2 in connected_components:
+                cluster_group_2 = [cluster_dict[c] for c in comp2]
+
+                n1, n2, dist = find_closest_nodes_between_clusters(
+                    cluster_group_1, cluster_group_2
+                )
+
+                if dist < min_dist:
+                    node1 = n1
+                    node2 = n2
+                    min_dist = dist
+
+                comp_counter += 1
+
+            # update the graph
+            G.add_edge(node1.cluster_id, node2.cluster_id)
+
+            # create new edge
+            edge = (
+                edge_id,
+                node1.node_id,
+                node2.node_id,
+                self.being_culture.value,
+                node_dist(node1, node2),
+            )
+            conn = create_connection(self.db_file)
+            create_edge(conn, edge)
+
+            edge_id += 1
+
+            x_values = [node1.x, node2.x]
+            y_values = [node2.y, node2.y]
+            draw_edge(self.ax, x_values, y_values)
+            self.edges.append(edge)
+
+            print(f"There are {comp_counter} connected Components")
+
     def draw_circles(self):
         """Draw the domain of the weird science beings"""
         angle = np.linspace(0, 2 * np.pi, 250)
@@ -315,10 +392,6 @@ class PlaneMap:
 
             # draw a circle
             self.ax.plot(x, y, color="gray")
-
-
-def dist(x1, y1, x2, y2):
-    return np.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
 
 
 def main():
