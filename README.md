@@ -114,10 +114,11 @@ off due to holiday
   versus all other strata
 - refactor *generate_nodes* so that it only generates nodes
   and doesn't have to also draw
+- first attempt at using streamlit for visualization
 
-- Use streamlit for interaction
 
 ## December 6, 2022
+- Use streamlit for interaction
 - Add visualization of all three planes
   - 3d plot with parallel planes
 - experiment with transparent background and plotting over an
