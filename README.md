@@ -6,6 +6,9 @@ Python library for generating interesting
 
 ![Plane Map of Weird Science](images/weird_science_plane.png)
 
+A future state of this project will be used to populate 
+the backed for the [beings project](https://github.com/joedaws/beings)
+
 ## Setup
 
 ### pyenv
@@ -24,15 +27,11 @@ poetry install
 For now try
 
 ``` shell
-poetry run python -m rattle_snake.plane_map
+poetry run python -m rattle_snake.plane_map --test
 ```
 
-which should generate an image in the images directory for a certain
+which will generate an image in the images directory for a certain
 plane of existence.
-
-## Exporting 
-
-Not yet implemented
 
 ## How are plane maps generated?
 
@@ -51,13 +50,16 @@ taking a uniformly random sample from the interval
 `[lower_bound, upper_bound]`. The bounds are determined according 
 to the particular stratum of the population center, where the `0th`
 stratum is the center most concentric circle. 
+When sampling to obtain a radius for a node, we take into account
+a `boundary_delta` which keeps generated nodes away from the
+boundary, this if for aesthetic reasons.
 
 **Edges**
 The population centers are connected to all of the their 
 supporting nodes, and some of the supporting nodes are connected to 
-the supporting nodes of other population centers. Among the supporting 
-nodes of a given population center, a random number of them are
-connected to their closest neighbor in another cluster of nodes. 
+the supporting nodes of other population centers. 
+Edges between clusters are drawn by finding the closest two
+supporting nodes from different clusters and connecting them.
 
 
 ## How will this project communicate with the Beings simulation?
@@ -103,8 +105,23 @@ Third option, translate this project to Elixir
   
 ## November 23, 2022
 
+off due to holiday
+
+## November 30, 2022
+
 - Add minimum distance between population centers
-  
+- allow different number of population centers for central
+  versus all other strata
+- refactor *generate_nodes* so that it only generates nodes
+  and doesn't have to also draw
+
+- Use streamlit for interaction
+
+## December 6, 2022
+- Add visualization of all three planes
+  - 3d plot with parallel planes
+- experiment with transparent background and plotting over an
+  interest background image
   
 ## Notes for improvement
 
@@ -120,4 +137,9 @@ improving the efficiency of the distance finding algorithm.
   
 ### Database improvements
 
-Could use a better database to support the backend of this project.
+Could use a different database to support the back-end of this project.
+In the future we'll connect this setup to a nodes table which will be
+the backend of the [beings](https://github.com/joedaws/beings)
+
+A interesting solution to explore next will be the 
+[cockroachdb](https://www.cockroachlabs.com/pricing/)

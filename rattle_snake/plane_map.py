@@ -1,10 +1,12 @@
 """
 draw the concentric circles
 """
+from typing import List, Tuple
 from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
+import click
 
 from rattle_snake.constants import BeingCulture
 from rattle_snake.draw import draw_pop_center, draw_support_node, draw_edge
@@ -26,8 +28,24 @@ from rattle_snake.db_helpers import (
 )
 
 
-def dist(x1, y1, x2, y2):
+def xy_dist(x1, y1, x2, y2):
     return np.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
+
+
+def min_dist_to_list(
+    new_xy: Tuple[float, float], list_of_old_xys: List[Tuple[float, float]]
+):
+    """Gets the minimum distiance between the new x, y pair and a list of others"""
+    new_x, new_y = new_xy
+    old_x, old_y = list_of_old_xys[0]
+    min_dist = xy_dist(old_x, old_y, new_x, new_y)
+
+    for old_x, old_y in list_of_old_xys[1:]:
+        dist = xy_dist(old_x, old_y, new_x, new_y)
+        if dist < min_dist:
+            min_dist = dist
+
+    return min_dist
 
 
 class PlaneMap:
@@ -90,25 +108,12 @@ class PlaneMap:
 
         return db_file_name
 
-    def load_map(self) -> None:
-        """Load the map data from the given db"""
-        self.stratum_radii = 2.0
-        self.stratum_boundaries = [
-            ((i) * self.stratum_radii, (i + 1) * self.stratum_radii)
-            for i in range(self.num_circles)
-        ]
+    def draw(self) -> None:
+        """Draws the nodes and edges in their current state"""
+        # stratum boundaries are setup here
+        self._setup_plotting()
 
-        # plotting setup
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111)
-        self.ax.set_aspect(1)
-        self.title = self.map_file_names[self.being_culture]
-        plt.title(self.title)
-
-        self.draw_circles()
-
-        self.nodes = get_plane_nodes(self.db_file, self.being_culture.value)
-
+        # draw nodes
         for _, x, y, _, stratum_id, _, pop_center, _ in self.nodes:
 
             if pop_center:
@@ -128,8 +133,7 @@ class PlaneMap:
                     self.markers[stratum_id - 1],
                 )
 
-        self.edges = get_plane_edges(self.db_file, self.being_culture.value)
-
+        # draw the edges
         for _, start, end, _, _ in self.edges:
             start_x, start_y = get_node_x_y(self.db_file, start)
             end_x, end_y = get_node_x_y(self.db_file, end)
@@ -139,7 +143,21 @@ class PlaneMap:
 
             draw_edge(self.ax, x_values, y_values)
 
-    def generate_map(self, k: int = 3, min_support: int = 3, max_support: int = 10):
+    def load_map(self) -> None:
+        """Load the map data from the given db"""
+        self.stratum_radii = 2.0
+        self.stratum_boundaries = [
+            ((i) * self.stratum_radii, (i + 1) * self.stratum_radii)
+            for i in range(self.num_circles)
+        ]
+
+        self.nodes = get_plane_nodes(self.db_file, self.being_culture.value)
+
+        self.edges = get_plane_edges(self.db_file, self.being_culture.value)
+
+    def generate_map(
+        self, center_k: int = 3, k: int = 7, min_support: int = 3, max_support: int = 10
+    ):
         """Generate the map and nodes and edges to a database
 
         There are k population centers in each stratum.
@@ -160,15 +178,6 @@ class PlaneMap:
             for i in range(self.num_circles)
         ]
 
-        # plotting setup
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111)
-        self.ax.set_aspect(1)
-        self.title = self.map_file_names[self.being_culture]
-        plt.title(self.title)
-
-        self.draw_circles()
-
         # this delta keeps the generated nodes farther away from the boundary
         boundary_delta = 0.3
 
@@ -180,8 +189,16 @@ class PlaneMap:
             print(f"stratum number {stratum_num}")
             stratum_num += 1
 
+            # initialize as a node at the origin
+            this_stratum_pop_center_xys = [(0, 0)]
+
+            if stratum_num == 1:
+                num_pop_centers = center_k
+            else:
+                num_pop_centers = k
+
             # generate the pop centers
-            for i in range(k):
+            for i in range(num_pop_centers):
                 length = np.random.uniform(
                     bounds[0] + boundary_delta, bounds[1] - boundary_delta
                 )
@@ -190,10 +207,30 @@ class PlaneMap:
 
                 x = length * np.cos(angle)
                 y = length * np.sin(angle)
-                print(self.stratum_boundaries[i][0], self.stratum_boundaries[i][1])
-                print(i, ":", x, y)
 
-                draw_pop_center(self.ax, x, y, self.colors[color_num], self.markers[i])
+                # if the newly generated population center is too close to any of the
+                # previously generated population centers
+                # then keep generating new candidates x and y until far enough away
+                min_radial_dist = stratum_num - 1 + 0.6
+
+                while (
+                    min_dist_to_list((x, y), this_stratum_pop_center_xys)
+                    < min_radial_dist
+                ):
+                    length = np.random.uniform(
+                        bounds[0] + boundary_delta, bounds[1] - boundary_delta
+                    )
+                    angle = np.pi * np.random.uniform(0, 2)
+
+                    x = length * np.cos(angle)
+                    y = length * np.sin(angle)
+                    print(f"Generating new x y candidate for pop center")
+
+                # store the new valid x, y pair
+                this_stratum_pop_center_xys.append((x, y))
+
+                # print(self.stratum_boundaries[i][0], self.stratum_boundaries[i][1])
+                print(i, ":", x, y)
 
                 # insert population center into the table
                 # is_population_center true == 1
@@ -234,16 +271,13 @@ class PlaneMap:
                 num_support = np.random.randint(min_support, max_support + 1)
                 for _ in range(num_support):
                     # controls how close the points are
-                    delta = 0.1
-                    l = np.random.uniform(length - delta, length + delta)
-                    a = np.random.uniform(angle - np.pi / 8, angle + np.pi / 8)
+                    length_delta = 0.1
+                    angle_delta = np.pi / 8
+                    l = np.random.uniform(length - length_delta, length + length_delta)
+                    a = np.random.uniform(angle - angle_delta, angle + angle_delta)
 
                     x = l * np.cos(a)
                     y = l * np.sin(a)
-
-                    draw_support_node(
-                        self.ax, x, y, self.colors[color_num], self.markers[i]
-                    )
 
                     yeild_delta = 50
                     supporting_node_resource_yeild = np.random.randint(
@@ -278,7 +312,6 @@ class PlaneMap:
                     # corresponding population center
                     x_values = [pop_center_x, x]
                     y_values = [pop_center_y, y]
-                    draw_edge(self.ax, x_values, y_values)
                     # edge_id, start, end, length
                     edge = (
                         edge_id,
@@ -323,7 +356,6 @@ class PlaneMap:
 
             x_values = [node1.x, node2.x]
             y_values = [node2.y, node2.y]
-            draw_edge(self.ax, x_values, y_values)
             self.edges.append(edge)
 
         # setup a graph to detect disconnected components
@@ -379,12 +411,11 @@ class PlaneMap:
 
             x_values = [node1.x, node2.x]
             y_values = [node2.y, node2.y]
-            draw_edge(self.ax, x_values, y_values)
             self.edges.append(edge)
 
             print(f"There are {comp_counter} connected Components")
 
-    def draw_circles(self):
+    def _draw_circles(self):
         """Draw the domain of the weird science beings"""
         angle = np.linspace(0, 2 * np.pi, 250)
 
@@ -397,9 +428,33 @@ class PlaneMap:
             # draw a circle
             self.ax.plot(x, y, color="gray")
 
+    def _setup_plotting(self):
+        """Sets up the matplotlib axes"""
+        # plotting setup
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111)
+        self.ax.set_aspect(1)
+        self.title = self.map_file_names[self.being_culture]
+        plt.title(self.title)
 
-def main():
+        self._draw_circles()
+
+
+@click.command()
+@click.option("--test/--no-test", default=False)
+def run(test):
+    if test:
+        test_main()
+    else:
+        weird_map = PlaneMap(being_culture=BeingCulture.WEIRD)
+        deep_map = PlaneMap(being_culture=BeingCulture.DEEP)
+        dream_map = PlaneMap(being_culture=BeingCulture.DREAM)
+
+
+def test_main():
+    # test generating map and saving
     plane_map = PlaneMap(being_culture=BeingCulture.WEIRD)
+    plane_map.draw()
     plane_map.save()
 
     print("Drawing Complete.")
@@ -409,9 +464,10 @@ def main():
     plane_map = PlaneMap(
         db_file=plane_map.db_file, being_culture=plane_map.being_culture
     )
+    plane_map.draw()
     plane_map.save()
     print("Drawing complete from map loaded from the db")
 
 
 if __name__ == "__main__":
-    main()
+    run()
