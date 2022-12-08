@@ -1,6 +1,8 @@
 import sqlite3
+from datetime import datetime
 
-from rattle_snake.constants import PLANES_DB_FILE
+from rattle_snake.node import tuple_to_node
+from rattle_snake.edge import tuple_to_edge
 
 
 CREATE_NODES_TABLE_QUERY = """
@@ -120,6 +122,14 @@ def create_edge(conn, edge):
     print(f"added edge {edge}")
 
 
+def generate_sqlite_db_file() -> str:
+    """Generate a new sqlite database filename"""
+    now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    db_file_name = f"beings-{now_str}.db"
+
+    return db_file_name
+
+
 def db_setup(db_file: str):
     """Sets up the database with tables if it hasn't already been setup."""
     conn = create_connection(db_file=db_file)
@@ -142,7 +152,8 @@ def get_plane_nodes(db_file: str, plane: str):
     cur = conn.cursor()
     cur.execute(GET_PLANE_NODES_QUERY, (plane,))
     rows = cur.fetchall()
-    return rows
+    print(f"Fetched {len(rows)} nodes from {db_file}")
+    return list(map(lambda row: tuple_to_node(*row), rows))
 
 
 def get_plane_edges(db_file: str, plane: str):
@@ -150,7 +161,8 @@ def get_plane_edges(db_file: str, plane: str):
     cur = conn.cursor()
     cur.execute(GET_PLANE_EDGES_QUERY, (plane,))
     rows = cur.fetchall()
-    return rows
+    print(f"Fetched {len(rows)} edges from {db_file}")
+    return list(map(lambda row: tuple_to_edge(*row), rows))
 
 
 def get_node_x_y(db_file: str, node_id: int):

@@ -11,6 +11,7 @@ import click
 from rattle_snake.constants import BeingCulture
 from rattle_snake.draw import draw_pop_center, draw_support_node, draw_edge
 from rattle_snake.node import Node, node_dist
+from rattle_snake.edge import Edge
 from rattle_snake.cluster import (
     Cluster,
     find_closest_nodes,
@@ -18,6 +19,7 @@ from rattle_snake.cluster import (
 )
 from rattle_snake.db_helpers import (
     db_setup,
+    generate_sqlite_db_file,
     create_node,
     create_edge,
     create_connection,
@@ -89,24 +91,46 @@ class PlaneMap:
             self.num_circles = get_num_circles(self.db_file, self.being_culture.value)
             self.load_map()
         else:
-            db_file_name = self.generate_sqlite_db()
+            db_file_name = generate_sqlite_db_file()
             self.db_file = db_file_name
             self.num_circles = num_circles
             db_setup(db_file=db_file_name)
 
-            self.generate_map()
+            self.__generate_map()
 
-    def save(self):
+    def save_fig(self):
         """Save an image of the map in is current state"""
         plt.savefig(self.title)
 
-    def generate_sqlite_db(self) -> str:
-        """Generate a new sqlite database"""
+    def save_to_db(self):
+        """Save the nodes and edges to the database"""
 
-        now_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        db_file_name = f"nodes-{now_str}.db"
+        conn = create_connection(self.db_file)
+        # save nodes to db
+        for node in self.nodes:
+            node = (
+                node.node_id,
+                node.x,
+                node.y,
+                self.being_culture.value,
+                node.stratum_id,
+                node.node_id,
+                node.is_population_center,
+                node.resource_yeild,
+            )
+            create_node(conn, node)
 
-        return db_file_name
+        conn = create_connection(self.db_file)
+        # save edges to db
+        for edge in self.edges:
+            edge = (
+                edge.edge_id,
+                edge.start_node_id,
+                edge.end_node_id,
+                edge.plane,
+                edge.length,
+            )
+            create_edge(conn, edge)
 
     def draw(self) -> None:
         """Draws the nodes and edges in their current state"""
@@ -114,29 +138,31 @@ class PlaneMap:
         self._setup_plotting()
 
         # draw nodes
-        for _, x, y, _, stratum_id, _, pop_center, _ in self.nodes:
+        print("drawing nodes")
+        for node in self.nodes:
 
-            if pop_center:
+            if node.is_population_center:
                 draw_pop_center(
                     self.ax,
-                    x,
-                    y,
-                    self.colors[stratum_id - 1],
-                    self.markers[stratum_id - 1],
+                    node.x,
+                    node.y,
+                    self.colors[node.stratum_id - 1],
+                    self.markers[node.stratum_id - 1],
                 )
             else:
                 draw_support_node(
                     self.ax,
-                    x,
-                    y,
-                    self.colors[stratum_id - 1],
-                    self.markers[stratum_id - 1],
+                    node.x,
+                    node.y,
+                    self.colors[node.stratum_id - 1],
+                    self.markers[node.stratum_id - 1],
                 )
 
         # draw the edges
-        for _, start, end, _, _ in self.edges:
-            start_x, start_y = get_node_x_y(self.db_file, start)
-            end_x, end_y = get_node_x_y(self.db_file, end)
+        print("drawing edges")
+        for edge in self.edges:
+            start_x, start_y = get_node_x_y(self.db_file, edge.start_node_id)
+            end_x, end_y = get_node_x_y(self.db_file, edge.end_node_id)
 
             x_values = [start_x, end_x]
             y_values = [start_y, end_y]
@@ -155,7 +181,7 @@ class PlaneMap:
 
         self.edges = get_plane_edges(self.db_file, self.being_culture.value)
 
-    def generate_map(
+    def __generate_map(
         self, center_k: int = 3, k: int = 7, min_support: int = 3, max_support: int = 10
     ):
         """Generate the map and nodes and edges to a database
@@ -237,16 +263,6 @@ class PlaneMap:
                 # yeild is fixed at 100 for now
                 population_center_resource_yeild = np.random.randint(100, 200)
                 # a population center's node_id is the same as it's cluster id
-                node = (
-                    node_id,
-                    x,
-                    y,
-                    self.being_culture.value,
-                    stratum_num,
-                    node_id,
-                    1,
-                    population_center_resource_yeild,
-                )
                 pop_node = Node(
                     node_id=node_id,
                     x=x,
@@ -258,13 +274,11 @@ class PlaneMap:
                     resource_yeild=population_center_resource_yeild,
                 )
 
-                conn = create_connection(self.db_file)
-                create_node(conn, node)
                 pop_center_id = node_id
                 pop_center_x = x
                 pop_center_y = y
                 node_id += 1
-                self.nodes.append(node)
+                self.nodes.append(pop_node)
 
                 # generate supporting nodes
                 cluster_supporting_nodes = []
@@ -285,16 +299,6 @@ class PlaneMap:
                         int(population_center_resource_yeild * 0.6),
                     )
                     # 0 for not a population center
-                    node = (
-                        node_id,
-                        x,
-                        y,
-                        self.being_culture.value,
-                        stratum_num,
-                        pop_center_id,
-                        0,
-                        supporting_node_resource_yeild,
-                    )
                     supp_node = Node(
                         node_id=node_id,
                         x=x,
@@ -306,25 +310,21 @@ class PlaneMap:
                         resource_yeild=supporting_node_resource_yeild,
                     )
                     cluster_supporting_nodes.append(supp_node)
-                    create_node(conn, node)
+                    # create_node(conn, node)
 
                     # all supporting nodes are connected to their
                     # corresponding population center
-                    x_values = [pop_center_x, x]
-                    y_values = [pop_center_y, y]
-                    # edge_id, start, end, length
-                    edge = (
-                        edge_id,
-                        pop_center_id,
-                        node_id,
-                        self.being_culture.value,
-                        node_dist(pop_node, supp_node),
+                    edge = Edge(
+                        edge_id=edge_id,
+                        start_node_id=pop_center_id,
+                        end_node_id=node_id,
+                        plane=self.being_culture.value,
+                        length=node_dist(pop_node, supp_node),
                     )
-                    create_edge(conn, edge)
 
                     edge_id += 1
                     node_id += 1
-                    self.nodes.append(node)
+                    self.nodes.append(supp_node)
                     self.edges.append(edge)
 
                 self.clusters.append(
@@ -342,20 +342,16 @@ class PlaneMap:
         for cluster in self.clusters:
             node1, node2, _ = find_closest_nodes(self.clusters, cluster)
             cluster_connections.append((node1.cluster_id, node2.cluster_id))
-            edge = (
-                edge_id,
-                node1.node_id,
-                node2.node_id,
-                self.being_culture.value,
-                node_dist(node1, node2),
+            edge = Edge(
+                edge_id=edge_id,
+                start_node_id=node1.node_id,
+                end_node_id=node2.node_id,
+                plane=self.being_culture.value,
+                length=node_dist(node1, node2),
             )
-            conn = create_connection(self.db_file)
-            create_edge(conn, edge)
 
             edge_id += 1
 
-            x_values = [node1.x, node2.x]
-            y_values = [node2.y, node2.y]
             self.edges.append(edge)
 
         # setup a graph to detect disconnected components
@@ -397,20 +393,16 @@ class PlaneMap:
             G.add_edge(node1.cluster_id, node2.cluster_id)
 
             # create new edge
-            edge = (
-                edge_id,
-                node1.node_id,
-                node2.node_id,
-                self.being_culture.value,
-                node_dist(node1, node2),
+            edge = Edge(
+                edge_id=edge_id,
+                start_node_id=node1.node_id,
+                end_node_id=node2.node_id,
+                plane=self.being_culture.value,
+                length=node_dist(node1, node2),
             )
-            conn = create_connection(self.db_file)
-            create_edge(conn, edge)
 
             edge_id += 1
 
-            x_values = [node1.x, node2.x]
-            y_values = [node2.y, node2.y]
             self.edges.append(edge)
 
             print(f"There are {comp_counter} connected Components")
@@ -440,22 +432,12 @@ class PlaneMap:
         self._draw_circles()
 
 
-@click.command()
-@click.option("--test/--no-test", default=False)
-def run(test):
-    if test:
-        test_main()
-    else:
-        weird_map = PlaneMap(being_culture=BeingCulture.WEIRD)
-        deep_map = PlaneMap(being_culture=BeingCulture.DEEP)
-        dream_map = PlaneMap(being_culture=BeingCulture.DREAM)
-
-
 def test_main():
     # test generating map and saving
     plane_map = PlaneMap(being_culture=BeingCulture.WEIRD)
+    plane_map.save_to_db()
     plane_map.draw()
-    plane_map.save()
+    plane_map.save_fig()
 
     print("Drawing Complete.")
     print(f"saved to {plane_map.title}")
@@ -465,9 +447,9 @@ def test_main():
         db_file=plane_map.db_file, being_culture=plane_map.being_culture
     )
     plane_map.draw()
-    plane_map.save()
+    plane_map.save_fig()
     print("Drawing complete from map loaded from the db")
 
 
 if __name__ == "__main__":
-    run()
+    test_main()

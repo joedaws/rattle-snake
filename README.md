@@ -27,7 +27,7 @@ poetry install
 For now try
 
 ``` shell
-poetry run python -m rattle_snake.plane_map --test
+poetry run python -m rattle_snake.plane_map 
 ```
 
 which will generate an image in the images directory for a certain
@@ -117,10 +117,10 @@ off due to holiday
 - first attempt at using streamlit for visualization
 
 
-## December 6, 2022
+## December 7, 2022
+- refactor PlaneMap so that database storage is done after generation
 - Use streamlit for interaction
-- Add visualization of all three planes
-  - 3d plot with parallel planes
+- do seeding of database before app start
 - experiment with transparent background and plotting over an
   interest background image
   
