@@ -119,7 +119,13 @@ off due to holiday
 
 ## December 7, 2022
 - refactor PlaneMap so that database storage is done after generation
+
+## December 14, 2022
+- need to fix the seeder script so that new nodes have unique ids. Right now
+  there is conflict when I am generating nodes for different planes. Consider
+  using ksuid for ids.
 - Use streamlit for interaction
+- setup the remote database and start loading nodes
 - do seeding of database before app start
 - experiment with transparent background and plotting over an
   interest background image

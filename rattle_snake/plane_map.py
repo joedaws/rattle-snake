@@ -86,26 +86,24 @@ class PlaneMap:
         """
         self.being_culture = being_culture
         if db_file:
-            self.db_file = db_file
-            db_setup(db_file=db_file)
-            self.num_circles = get_num_circles(self.db_file, self.being_culture.value)
-            self.load_map()
+            self.num_circles = get_num_circles(db_file, self.being_culture.value)
+            self.load_map(db_file=db_file)
         else:
-            db_file_name = generate_sqlite_db_file()
-            self.db_file = db_file_name
             self.num_circles = num_circles
-            db_setup(db_file=db_file_name)
-
             self.__generate_map()
 
     def save_fig(self):
         """Save an image of the map in is current state"""
         plt.savefig(self.title)
 
-    def save_to_db(self):
+    def save_to_db(self, db_file: str = ""):
         """Save the nodes and edges to the database"""
+        # create db if it doesn't already exist
+        if not db_file:
+            db_file = generate_sqlite_db_file()
+            db_setup(db_file=db_file)
 
-        conn = create_connection(self.db_file)
+        conn = create_connection(db_file)
         # save nodes to db
         for node in self.nodes:
             node = (
@@ -120,7 +118,7 @@ class PlaneMap:
             )
             create_node(conn, node)
 
-        conn = create_connection(self.db_file)
+        conn = create_connection(db_file)
         # save edges to db
         for edge in self.edges:
             edge = (
@@ -161,15 +159,22 @@ class PlaneMap:
         # draw the edges
         print("drawing edges")
         for edge in self.edges:
-            start_x, start_y = get_node_x_y(self.db_file, edge.start_node_id)
-            end_x, end_y = get_node_x_y(self.db_file, edge.end_node_id)
+            start_node = [
+                node for node in self.nodes if node.node_id == edge.start_node_id
+            ][0]
+            start_x, start_y = start_node.x, start_node.y
+
+            end_node = [
+                node for node in self.nodes if node.node_id == edge.end_node_id
+            ][0]
+            end_x, end_y = end_node.x, end_node.y
 
             x_values = [start_x, end_x]
             y_values = [start_y, end_y]
 
             draw_edge(self.ax, x_values, y_values)
 
-    def load_map(self) -> None:
+    def load_map(self, db_file: str) -> None:
         """Load the map data from the given db"""
         self.stratum_radii = 2.0
         self.stratum_boundaries = [
@@ -177,9 +182,9 @@ class PlaneMap:
             for i in range(self.num_circles)
         ]
 
-        self.nodes = get_plane_nodes(self.db_file, self.being_culture.value)
+        self.nodes = get_plane_nodes(db_file, self.being_culture.value)
 
-        self.edges = get_plane_edges(self.db_file, self.being_culture.value)
+        self.edges = get_plane_edges(db_file, self.being_culture.value)
 
     def __generate_map(
         self, center_k: int = 3, k: int = 7, min_support: int = 3, max_support: int = 10
@@ -434,8 +439,10 @@ class PlaneMap:
 
 def test_main():
     # test generating map and saving
+    db_file = generate_sqlite_db_file()
+    db_setup(db_file)
     plane_map = PlaneMap(being_culture=BeingCulture.WEIRD)
-    plane_map.save_to_db()
+    plane_map.save_to_db(db_file=db_file)
     plane_map.draw()
     plane_map.save_fig()
 
@@ -443,9 +450,7 @@ def test_main():
     print(f"saved to {plane_map.title}")
 
     # test the loading
-    plane_map = PlaneMap(
-        db_file=plane_map.db_file, being_culture=plane_map.being_culture
-    )
+    plane_map = PlaneMap(db_file=db_file, being_culture=plane_map.being_culture)
     plane_map.draw()
     plane_map.save_fig()
     print("Drawing complete from map loaded from the db")

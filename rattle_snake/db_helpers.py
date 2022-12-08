@@ -142,6 +142,7 @@ def get_num_circles(db_file: str, plane: str) -> int:
     cur = conn.cursor()
     cur.execute(NUM_CIRCLES_QUERY, (plane,))
     rows = cur.fetchall()
+    print(f"While getting number of circles we got: {rows}")
     num_circles = int(rows[0][0])
     print(f"The number of cirlces retrived for {plane} was {num_circles}")
     return num_circles
