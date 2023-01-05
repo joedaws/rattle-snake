@@ -9,6 +9,15 @@ Python library for generating interesting
 A future state of this project will be used to populate 
 the backed for the [beings project](https://github.com/joedaws/beings)
 
+## TODOs
+
+- [ ] add name generation to nodes based on region
+- [ ] update the [node dataclass](./rattle_snake/node.py) to include
+      a `resource_type` attribute
+- [ ] update the `_generate_map` function to create nodes with 
+      `resource_types` Probably need to think about distribution
+      of different regions.
+
 ## Setup
 
 ### pyenv
